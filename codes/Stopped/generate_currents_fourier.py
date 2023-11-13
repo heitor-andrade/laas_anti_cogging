@@ -7,44 +7,47 @@ import sys
 sys.path.append('../') 
 from utils import get_data
 
-
-
-
 path = "stopped_data/"
-filename = "stopped_data_test2.txt"
-times,positions, velocities, iqs, uqs, supplys, errors_pos = get_data(filename, path)
+filename = "stopped_data_test3.txt"
+times,positions, velocities, currents, uqs, supplys, errors_pos = get_data(filename, path)
 
 # Consolidate Current of bigger magnitude
-positions_temp, iqs_temp, duty_cicles = [], [], []
-for i in range(len(positions)):
-    if positions[i] > 0:
-        pos = abs(positions[i])%(2*pi)
-    else:
-        pos = (2*pi)-(abs(positions[i])%(2*pi))
+def get_consolidate_data(positions, currents):
+    positions_temp, currents_temp = [], []
+    for i in range(len(positions)):
+        if positions[i] > 0:
+            pos = abs(positions[i])%(2*pi)
+        else:
+            pos = (2*pi)-(abs(positions[i])%(2*pi))
 
-    dc = uqs[i]/supplys[i]
-    if pos not in positions_temp:
-        positions_temp.append(pos)
-        iqs_temp.append(iqs[i])
-        duty_cicles.append(dc)
-    else:
-        ind = positions_temp.index(pos)
-        if abs(iqs[i]) > abs(iqs_temp[ind]):
-            iqs_temp[ind] = iqs[i]
-        if abs(dc) > abs(duty_cicles[ind]):
-            duty_cicles[ind] = iqs[i]
+        if pos not in positions_temp:
+            positions_temp.append(pos)
+            currents_temp.append(currents[i])
+        else:
+            ind = positions_temp.index(pos)
+            if abs(currents[i]) > abs(currents_temp[ind]):
+                currents_temp[ind] = currents[i]
 
-positions = positions_temp
-iqs = iqs_temp
+    return positions_temp, currents_temp
 
-# Combine os arrays em pares (posição, corrente)
-combined = list(zip(positions, iqs))
-sorted_combined = sorted(combined, key=lambda x: x[0])
-positions, currents = zip(*sorted_combined)
-positions = list(positions)
-currents = list(currents)
+index_max = positions.index(max(positions))
+positions_reverse = positions[index_max:]
+currents_reverse = currents[index_max:]
+positions = positions[ :index_max + 1]
+currents = currents[ :index_max + 1]
 
-# Get currents uniform in position
+positions, currents = get_consolidate_data(positions, currents)
+positions_reverse, currents_reverse = get_consolidate_data(positions_reverse, currents_reverse)
+
+# plt.plot(positions, currents, ".", label = "Forward Data")
+# plt.plot(positions_reverse, currents_reverse, ".", label = "Reverse Data")
+# plt.title("Cogging mapping with motor stopped")
+# plt.xlabel("Position [rad]")
+# plt.ylabel("Current [A]")
+# plt.legend()
+# plt.show()
+
+# Get mean of currents forward and reverse uniformely in position
 INTERVAL_POSITION = 0.002
 
 NUM_POINTS = int(2*pi / INTERVAL_POSITION)
@@ -54,6 +57,7 @@ uniform_positions = []
 
 for i in range(len(uniform_positions_desired)):
     temp_cs = []
+    temp_cs_rev = []
     left_lim = uniform_positions_desired[i-1]  
     if i != len(uniform_positions_desired) - 1:
         right_lim = uniform_positions_desired[i+1]        
@@ -64,16 +68,33 @@ for i in range(len(uniform_positions_desired)):
         for j in range(len(positions)):
             if positions[j] > left_lim or positions[j] < right_lim:
                 temp_cs.append(currents[j])
+        for j in range(len(positions_reverse)):
+            if positions_reverse[j] > left_lim or positions_reverse[j] < right_lim:
+                temp_cs_rev.append(currents_reverse[j])
 
     else: # if 0 < i < len(pos) - 1
         for j in range(len(positions)):
             if positions[j] > left_lim and positions[j] < right_lim:
                 temp_cs.append(currents[j])
+        for j in range(len(positions_reverse)):
+            if positions_reverse[j] > left_lim and positions_reverse[j] < right_lim:
+                temp_cs_rev.append(currents_reverse[j])
     
-    if len(temp_cs) != 0:
-        uniform_currents.append(sum(temp_cs) / len(temp_cs))
+    if len(temp_cs) != 0 and len(temp_cs_rev) != 0:
+        curr = sum(temp_cs) / len(temp_cs)
+        curr_rev = sum(temp_cs_rev) / len(temp_cs_rev)
+        uniform_currents.append((curr + curr_rev) / 2)
         uniform_positions.append(uniform_positions_desired[i])
 
+
+plt.plot(positions, currents, ".", label = "Forward Current")
+plt.plot(positions_reverse, currents_reverse, ".", label = "Reverse Current")
+plt.plot(uniform_positions, uniform_currents, ".", label = "Anti Cogging Current")
+plt.title("Cogging mapping with motor stopped")
+plt.xlabel("Position [rad]")
+plt.ylabel("Current [A]")
+plt.legend()
+plt.show()
 
 # Define Fourier variables
 L = 2*np.pi                     # Domain  
@@ -92,7 +113,7 @@ a0 = a0 / L
 
 # Compute Coefficients
 aks, bks = [], []
-NUM_COEFFS = 100
+NUM_COEFFS = 160
 for k in range(1, NUM_COEFFS):
     ak = 0
     bk = 0
@@ -107,17 +128,30 @@ for k in range(1, NUM_COEFFS):
 
 # Reconstruct the fourier function
 fourier = []
-NUM_POINTS_DESIRED = 3600
-fourier_xs = np.linspace(0, 2*np.pi - (2*np.pi/NUM_POINTS_DESIRED), NUM_POINTS_DESIRED)
+NUM_POINTS_DESIRED = 3600*2
+fourier_xs = np.linspace(0, 2*np.pi - (2*np.pi / NUM_POINTS_DESIRED), NUM_POINTS_DESIRED)
 for x in fourier_xs:
     f = a0
     for k in range(len(aks)):
         f += aks[k]*np.cos((k+1)*2*pi*x/L) + bks[k]*np.sin((k+1)*2*pi*x/L)
     fourier.append(f)
 
+
+
+dif_fourier = [abs(fourier[i] - fourier[i+1]) for i in range(len(fourier) - 1)]
+plt.plot(fourier_xs[:-1], dif_fourier, '.' ,label = "Fourier Function")
+plt.title(f"Diference between point of Anti-cogging current")
+plt.xlabel("Position [rad/s]")
+plt.ylabel("Current [A]")
+plt.grid()
+plt.legend()
+plt.show()
+
+
+
 # Plot results
-plt.plot(positions, currents, '.', label = "Data")
-plt.plot(xs, fs, '.', label = "Uniform Data")
+# plt.plot(positions, currents, '.', label = "Data")
+plt.plot(xs, fs, label = "Anti Cogging Current")
 plt.plot(fourier_xs, fourier, '.' ,label = "Fourier Function")
 plt.title(f"Current fit with uniform sampling in space")
 plt.xlabel("Position [rad/s]")

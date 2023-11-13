@@ -78,32 +78,22 @@ inline float AntiCogging(foc_t* p_foc)
     cmd_reg_t* p_cmd_reg                = &p_foc->motor_cmd.enableReg.bit;
     float position = p_enc->thetaAbsolute - ((p_cmd_reg->encOffsetEnable) ? (p_enc->thetaIndex) : (0.0f));
 
-    static float last_position;
-    static const float ist = 0.0563f;
-    int signal_ist = 0;
-
+    static bool anti_cogging_activated = true;
     position = fmod(position,2*M_PI);
-    
     if (position < 0)
         {position = 2*M_PI + position;}
 
+    if(p_foc->motor_cmd.kpCoeff == 0)
+        anti_cogging_activated = true;
+    else
+        anti_cogging_activated = false;
+
     if (p_enc->indexDetect){
-        int index = (int)(position*(NUM_POINTS_COGGING)/(2*M_PI));
-
-        if (position - last_position > 0)
-            {signal_ist = 1;}
-        else if (position - last_position < 0)
-            {signal_ist = -1;}
-        else
-            {signal_ist = 0;}
-
-        last_position = position;
-        if (p_foc->motor_cmd.kpCoeff == 0)
+        int index = (int)(position * (NUM_POINTS_COGGING)/(2*M_PI*(1 - 1/NUM_POINTS_COGGING)));
+        if (anti_cogging_activated)
             return anti_cogging_tableau[index]*COGGING_LSB;
-        if (p_foc->motor_cmd.kpCoeff == 1)
+        else
             return 0;
-        if (p_foc->motor_cmd.kpCoeff == 2)
-            return anti_cogging_tableau[index]*COGGING_LSB + signal_ist * ist;
     }
     return 0;
 }
@@ -142,14 +132,13 @@ inline void FOC_runControl(foc_t* p_foc)
 
     // Compute Current Reference
 
-//     double position_ref = p_foc->motor_cmd.posRef;
-//     cmd_reg_t* p_cmd_reg                = &p_foc->motor_cmd.enableReg.bit;
-//     double position = p_enc->thetaAbsolute - ((p_cmd_reg->encOffsetEnable) ? (p_enc->thetaIndex) : (0.0f));
-// //    static double dt = 1/40000;
+    // double position_ref = p_foc->motor_cmd.posRef;
+    // cmd_reg_t* p_cmd_reg                = &p_foc->motor_cmd.enableReg.bit;
+    // double position = p_enc->thetaAbsolute - ((p_cmd_reg->encOffsetEnable) ? (p_enc->thetaIndex) : (0.0f));
+    // double perr = position_ref - position;
+    // p_foc->ierr = p_foc->ierr + perr/40000;
 
-//     double perr = position_ref - position;
-//     p_foc->ierr = p_foc->ierr + perr/40000;
-//     *(p_foc->piIq.p_set) = p_foc->motor_cmd.kpCoeff * perr + p_foc->motor_cmd.kdCoeff * (-p_enc->speed.speedMech[0]) + p_foc->motor_cmd.iqff * p_foc->ierr;
+    // *(p_foc->piIq.p_set) = p_foc->motor_cmd.kpCoeff * perr + p_foc->motor_cmd.kdCoeff * (-p_enc->speed.speedMech[0]) + p_foc->motor_cmd.iqff * p_foc->ierr;
 
 //     p_foc->test = perr;
 //     p_foc->Kp = p_foc->motor_cmd.kpCoeff * perr;

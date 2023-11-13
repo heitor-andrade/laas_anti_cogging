@@ -24,18 +24,18 @@ iqs_reverse = iqs[index_max:]
 
 ax[0].plot(positions, iqs, '.', label = "Current Forward")
 ax[0].plot(positions_reverse, iqs_reverse, '.', label = "Current Reverse")
-# ax[0].plot(velocitiesr, iqsr, '.', label = "Current")
-# ax[0].plot(timesr, positions_refr, '.', label = "Reference Position")
-# ax[0].plot(times, positions, '.', label = "Actual Position")
-ax[0].set_title(f"Time X Position using Stopped Algorithm")
-ax[0].set_xlabel("Time [s]")
-ax[0].set_ylabel("Position [rad]")
+ax[0].set_title(f"Position X Current")
+ax[0].set_xlabel("Position [rad]")
+ax[0].set_ylabel("Current [A]")
 ax[0].grid()
 ax[0].legend()
 
-ax[1].plot(timesr, positionsr, '.', label = "Actual position")
-ax[1].plot(timesr, positions_refr, '.', label = "Reference position")
-# ax[1].plot(positionsr, positions_refr, '.', label = "Velocity")
-
+ax[1].plot(np.array(timesr)/60, positionsr, label = "Actual position")
+ax[1].plot(np.array(timesr)/60, positions_refr, ':', label = "Reference position")
+ax[1].set_title(f"Time X Position")
+ax[1].set_xlabel("Time [min]")
+ax[1].set_ylabel("Position [rad]")
+ax[1].grid()
+ax[1].legend()
 
 plt.show()

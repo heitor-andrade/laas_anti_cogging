@@ -20,7 +20,7 @@ timesr, positionsr, positions_refr, velocitiesr, iqsr, vqsr, vsupplysr = [], [],
 pygame.init()
 WIDTH, HEIGHT = 600, 400
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Simulação de Temperatura")
+pygame.display.set_caption("Anticogging Mapping")
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 FONT_COLOR = BLACK
@@ -54,19 +54,16 @@ ud.transfer()
 t = time.perf_counter()
 init_time = time.time()
 INTERVAL_POSITION = 0.002
-position_ref = INTERVAL_POSITION
-last_position = 0
+position_ref = -INTERVAL_POSITION
 # position_ref = 1*2*np.pi /360
 
 
 # Position control PID
-Kp = 30
+Kp = 3
 Kd = 0.006
 Ki = 1
 
-# Kp = 9.0
-# Kd = 0.006
-# Ki = 0# 1 #2
+# After initialization: Kp = 30, Ki = ?, Kd = 0.006
 
 pid0 = PID(Kp,Ki,Kd, 0.5)
 
@@ -80,7 +77,7 @@ text = ''
 save = False
 count_store = 0
 
-while (ud.position0  > -0.1 or direction == 1) and simulating:
+while (ud.position0  > -0.01 or time.time() - init_time < 5) and simulating :
     now = time.time()
     error = position_ref - ud.position0
 
@@ -106,8 +103,8 @@ while (ud.position0  > -0.1 or direction == 1) and simulating:
     vqsr.append(round(ud.tension0, 5))
     vsupplysr.append(round(ud.supply0, 5))
 
-    if abs(ud.velocity0) == 0.00:
-        if  stopped==False and abs(ud.position0 - position_ref) < INTERVAL_POSITION: # and now - last_time_moving > dt*3:
+    if abs(ud.velocity0) == 0.00 and now - init_time > 5:
+        if  stopped == False and abs(ud.position0 - position_ref) < INTERVAL_POSITION: # and now - last_time_moving > dt*3:
             stopped = True
     else:
         stopped = False
@@ -146,7 +143,7 @@ while (ud.position0  > -0.1 or direction == 1) and simulating:
                 text += key_to_number[event.key]
             if event.key == pygame.K_p:
                 if text == '':
-                    pid0.Kp += 0.1
+                    pid0.Kp += 1
                 else:
                     pid0.Kp = float(text)
                 text = ''
@@ -175,7 +172,9 @@ while (ud.position0  > -0.1 or direction == 1) and simulating:
         render_text(f"Kp: {pid0.Kp}", WIDTH // 2, HEIGHT // 2 + 30)
         render_text(f"Ki: {pid0.Ki}", WIDTH // 2, HEIGHT // 2 + 60)
         render_text(f"Kd: {pid0.Kd}", WIDTH // 2, HEIGHT // 2 + 90)
-        render_text(f"Time: {round(now/60)}", WIDTH // 2, HEIGHT // 2 + 120)
+        render_text(f"Time: {round((now - init_time)/60, 1)} min", WIDTH // 2, HEIGHT // 2 + 120)
+        if position_ref != 0:
+            render_text(f"Time estimated: {round((round((now - init_time)/60) * 4*np.pi / position_ref)/60, 1) } h", WIDTH // 2, HEIGHT // 2 + 150)
         pygame.display.flip()
         count_screen = 0
 
