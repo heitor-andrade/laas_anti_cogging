@@ -83,11 +83,6 @@ inline float AntiCogging(foc_t* p_foc)
     if (position < 0)
         {position = 2*M_PI + position;}
 
-    if(p_foc->motor_cmd.kpCoeff == 0)
-        anti_cogging_activated = true;
-    else
-        anti_cogging_activated = false;
-
     if (p_enc->indexDetect){
         int index = (int)(position * (NUM_POINTS_COGGING)/(2*M_PI*(1 - 1/NUM_POINTS_COGGING)));
         if (anti_cogging_activated)
@@ -132,24 +127,27 @@ inline void FOC_runControl(foc_t* p_foc)
 
     // Compute Current Reference
 
-    // double position_ref = p_foc->motor_cmd.posRef;
-    // cmd_reg_t* p_cmd_reg                = &p_foc->motor_cmd.enableReg.bit;
-    // double position = p_enc->thetaAbsolute - ((p_cmd_reg->encOffsetEnable) ? (p_enc->thetaIndex) : (0.0f));
-    // double perr = position_ref - position;
-    // p_foc->ierr = p_foc->ierr + perr/40000;
+    #if (MAPPING_COGGING_ENABLE)
+        double position_ref = p_foc->motor_cmd.posRef;
+        cmd_reg_t* p_cmd_reg                = &p_foc->motor_cmd.enableReg.bit;
+        double position = p_enc->thetaAbsolute - ((p_cmd_reg->encOffsetEnable) ? (p_enc->thetaIndex) : (0.0f));
+        double perr = position_ref - position;
+        p_foc->ierr = p_foc->ierr + perr/40000;
 
-    // *(p_foc->piIq.p_set) = p_foc->motor_cmd.kpCoeff * perr + p_foc->motor_cmd.kdCoeff * (-p_enc->speed.speedMech[0]) + p_foc->motor_cmd.iqff * p_foc->ierr;
+        *(p_foc->piIq.p_set) = p_foc->motor_cmd.kpCoeff * perr + p_foc->motor_cmd.kdCoeff * (-p_enc->speed.speedMech[0]) + p_foc->motor_cmd.iqff * p_foc->ierr;
+        p_foc->test = perr;
+        p_foc->Kp = p_foc->motor_cmd.kpCoeff * perr;
+        p_foc->Ki = p_foc->motor_cmd.iqff * p_foc->ierr;
+        p_foc->Ki = p_foc->motor_cmd.kdCoeff * (-p_enc->speed.speedMech[0]);
 
-//     p_foc->test = perr;
-//     p_foc->Kp = p_foc->motor_cmd.kpCoeff * perr;
-//     p_foc->Ki = p_foc->motor_cmd.iqff * p_foc->ierr;
-//     p_foc->Ki = p_foc->motor_cmd.kdCoeff * (-p_enc->speed.speedMech[0]);
-
+        p_foc->ud               = FOC_runPI(&p_foc->piId, 0);
+        p_foc->uq               = FOC_runPI(&p_foc->piIq, 0);
+    #else
     // Compute Id(Flux Current) and Iq (Torque Current) PI controllers
-    p_foc->ud               = FOC_runPI(&p_foc->piId, 0);
-    // p_foc->uq               = p_foc->motor_cmd.velRef; //FOC_runPI(&p_foc->piIq);
-    p_foc->uq               = FOC_runPI(&p_foc->piIq, AntiCogging(p_foc));
-    //p_foc->uq               = FOC_runPI(&p_foc->piIq, 0);
+        p_foc->ud               = FOC_runPI(&p_foc->piId, 0);
+        p_foc->uq               = FOC_runPI(&p_foc->piIq, AntiCogging(p_foc));
+    #endif
+    
     p_foc->vmax             = p_acq->vbus * FM_1DIVSQRT3;
 //    p_foc->udMax            = p_foc->vmax;
 //    p_foc->uqMax            = __sqrt((p_foc->vmax * p_foc->vmax) - (p_foc->ud * p_foc->ud));
